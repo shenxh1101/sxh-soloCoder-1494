@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Noto Sans SC', system-ui, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  color: #1a1a2e;
+  background-color: #fdf6f3;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(circle at 15% 10%, rgba(232, 180, 160, 0.18) 0, transparent 40%),
+    radial-gradient(circle at 85% 80%, rgba(212, 175, 55, 0.12) 0, transparent 45%);
+  background-attachment: fixed;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Lora', serif;
+  letter-spacing: 0.01em;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+  }
+  .btn-primary {
+    @apply btn bg-champagne-400 text-white shadow-gold hover:bg-champagne-500 hover:-translate-y-0.5 focus-visible:ring-champagne-400;
+  }
+  .btn-secondary {
+    @apply btn bg-ink-800 text-white hover:bg-ink-700 hover:-translate-y-0.5 focus-visible:ring-ink-500;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-ink-600 hover:bg-ink-100 focus-visible:ring-ink-300;
+  }
+  .btn-outline {
+    @apply btn bg-white border border-ink-200 text-ink-700 hover:border-rosegold-300 hover:text-rosegold-600 hover:-translate-y-0.5;
+  }
+  .btn-danger {
+    @apply btn bg-rosegold-50 text-rosegold-700 hover:bg-rosegold-100 focus-visible:ring-rosegold-300;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-card border border-ink-100/70 backdrop-blur-sm;
+  }
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-cardHover hover:-translate-y-1;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 rounded-lg border border-ink-200 bg-white text-ink-800 text-sm placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-champagne-400/40 focus:border-champagne-300 transition-all;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-ink-600 mb-1.5;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-enabled {
+    @apply bg-emerald-50 text-emerald-700 border border-emerald-200;
+  }
+  .badge-disabled {
+    @apply bg-ink-100 text-ink-500 border border-ink-200;
+  }
+  .badge-gold {
+    @apply bg-champagne-50 text-champagne-700 border border-champagne-200;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-ink-500 hover:text-ink-800 hover:bg-white/60 transition-all;
+  }
+  .nav-link-active {
+    @apply text-ink-900 bg-white shadow-card border border-ink-100;
+  }
+
+  .tab-btn {
+    @apply px-4 py-2 rounded-lg text-sm font-medium transition-all;
+  }
+  .tab-btn-active {
+    @apply bg-ink-800 text-white shadow-card;
+  }
+  .tab-btn-inactive {
+    @apply text-ink-500 hover:bg-ink-100/60;
+  }
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(26, 26, 46, 0.15);
+  border-radius: 3px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
