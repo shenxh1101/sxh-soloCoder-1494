@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Plus,
   Trash2,
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { formatMoney } from '@/utils/format';
-import { countItems, sumItems } from '@/utils/discountEngine';
+import { computeAllPlans, countItems, sumItems } from '@/utils/discountEngine';
 import type { DiscountPlan } from '@/types';
 import Modal from '@/components/Modal';
 
@@ -28,31 +28,35 @@ const typeIcons: Record<string, typeof Tag> = {
 export default function Checkout() {
   const cart = useStore((s) => s.cart);
   const isMember = useStore((s) => s.isMember);
+  const promotions = useStore((s) => s.promotions);
   const addCartItem = useStore((s) => s.addCartItem);
   const updateCartItem = useStore((s) => s.updateCartItem);
   const removeCartItem = useStore((s) => s.removeCartItem);
   const clearCart = useStore((s) => s.clearCart);
   const setIsMember = useStore((s) => s.setIsMember);
-  const computePlans = useStore((s) => s.computePlans);
   const checkout = useStore((s) => s.checkout);
 
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [qty, setQty] = useState('1');
   const [showSuccess, setShowSuccess] = useState<null | { orderId: string; final: number }>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
-  const plans = useMemo(() => computePlans(), [cart, computePlans]);
-  const bestPlan = plans.find((p) => p.isBest);
-  const selectedId = useStore((s) => s.selectedPlan?.promotionId ?? 'best');
-  const setSelectedPlan = useStore((s) => s.setSelectedPlan);
+  const plans = useMemo(() => {
+    if (cart.length === 0) return [];
+    return computeAllPlans(cart, promotions, isMember);
+  }, [cart, promotions, isMember]);
 
-  useEffect(() => {
-    if (bestPlan) setSelectedPlan(bestPlan);
-    else setSelectedPlan(null);
-  }, [bestPlan, setSelectedPlan]);
+  const bestPlan = plans.find((p) => p.isBest) ?? null;
 
-  const selectedPlan: DiscountPlan | null =
-    plans.find((p) => (p.promotionId ?? 'none') === selectedId) || bestPlan || plans[0] || null;
+  const selectedPlan: DiscountPlan | null = useMemo(() => {
+    if (plans.length === 0) return null;
+    if (selectedKey) {
+      const found = plans.find((p) => (p.promotionId ?? 'none') === selectedKey);
+      if (found) return found;
+    }
+    return bestPlan ?? plans[0] ?? null;
+  }, [plans, selectedKey, bestPlan]);
 
   const totalItems = countItems(cart);
   const totalOriginal = sumItems(cart);
@@ -71,6 +75,7 @@ export default function Checkout() {
     if (!selectedPlan) return;
     const order = checkout(selectedPlan);
     setShowSuccess({ orderId: order.id.slice(0, 8).toUpperCase(), final: order.finalAmount });
+    setSelectedKey(null);
     setTimeout(() => setShowSuccess(null), 3200);
   }
 
@@ -256,12 +261,11 @@ export default function Checkout() {
                 {plans.map((plan) => {
                   const Icon = plan.promotionType ? typeIcons[plan.promotionType] : null;
                   const isSelected =
-                    (plan.promotionId ?? 'none') === selectedId ||
-                    (plan.isBest && selectedId === 'best' && !plans.some((p) => (p.promotionId ?? 'none') === selectedId));
+                    (plan.promotionId ?? 'none') === (selectedPlan?.promotionId ?? 'none');
                   return (
                     <button
                       key={plan.promotionId ?? 'none'}
-                      onClick={() => setSelectedPlan(plan)}
+                      onClick={() => setSelectedKey(plan.promotionId ?? 'none')}
                       className={`w-full text-left p-3.5 rounded-xl border transition-all ${
                         plan.isBest
                           ? 'bg-gradient-to-br from-champagne-50 via-white to-rosegold-50/60 border-champagne-300 shadow-gold'

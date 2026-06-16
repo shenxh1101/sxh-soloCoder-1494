@@ -17,6 +17,9 @@ import {
   Trash,
   ChevronDown,
   ChevronUp,
+  Archive,
+  Clock,
+  FileText,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import {
@@ -28,8 +31,9 @@ import {
   type SecondHalfConfig,
   type MemberDiscountConfig,
   type FixedDiscountConfig,
+  type PromotionTemplate,
 } from '@/types';
-import { discountPercent, formatDateShort } from '@/utils/format';
+import { discountPercent, formatDateShort, formatMoney } from '@/utils/format';
 import Modal from '@/components/Modal';
 
 const typeIconMap: Record<PromotionType, typeof Tag> = {
@@ -56,6 +60,7 @@ export default function Promotions() {
   const deletePromotion = useStore((s) => s.deletePromotion);
   const togglePromotion = useStore((s) => s.togglePromotion);
   const saveAsTemplate = useStore((s) => s.saveAsTemplate);
+  const archivePromotion = useStore((s) => s.archivePromotion);
   const createFromTemplate = useStore((s) => s.createFromTemplate);
   const deleteTemplate = useStore((s) => s.deleteTemplate);
 
@@ -65,6 +70,10 @@ export default function Promotions() {
   const [showSaveTpl, setShowSaveTpl] = useState<null | string>(null);
   const [tplName, setTplName] = useState('');
   const [expandId, setExpandId] = useState<string | null>(null);
+  const [showArchive, setShowArchive] = useState<null | string>(null);
+  const [archiveForm, setArchiveForm] = useState({ name: '', notes: '' });
+  const [tplFilter, setTplFilter] = useState<'all' | 'archive' | 'saved'>('all');
+  const [expandTplId, setExpandTplId] = useState<string | null>(null);
 
   const [form, setForm] = useState<{
     name: string;
@@ -142,6 +151,22 @@ export default function Promotions() {
     }
   }
 
+  function doArchive() {
+    if (!showArchive) return;
+    archivePromotion(showArchive, {
+      name: archiveForm.name.trim(),
+      notes: archiveForm.notes.trim(),
+    });
+    setShowArchive(null);
+    setArchiveForm({ name: '', notes: '' });
+  }
+
+  function openArchiveModal(id: string) {
+    const p = promotions.find((x) => x.id === id);
+    setArchiveForm({ name: p?.name || '', notes: '' });
+    setShowArchive(id);
+  }
+
   function doFromTpl(tplId: string) {
     const newP = createFromTemplate(tplId);
     openEdit(newP);
@@ -182,6 +207,12 @@ export default function Promotions() {
     }
   }
 
+  const filteredTemplates = templates.filter((t) => {
+    if (tplFilter === 'archive') return t.isArchive;
+    if (tplFilter === 'saved') return !t.isArchive;
+    return true;
+  });
+
   return (
     <div className="container max-w-6xl py-6">
       <div className="flex items-center justify-between mb-6">
@@ -190,7 +221,7 @@ export default function Promotions() {
             <Tag className="w-6 h-6 text-rosegold-500" />
             活动管理
           </h2>
-          <p className="text-sm text-ink-500 mt-1">创建活动规则、启停活动、保存模板方便复用</p>
+          <p className="text-sm text-ink-500 mt-1">创建活动规则、启停活动、归档保存模板方便复用</p>
         </div>
         {tab === 'active' && (
           <button onClick={openCreate} className="btn-primary">
@@ -247,8 +278,8 @@ export default function Promotions() {
                         <div className="min-w-0">
                           <h4 className="font-display font-semibold text-ink-800 truncate">{p.name}</h4>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className={`badge ${p.enabled ? 'badge-enabled' : 'badge-disabled'}`}>
-                              {p.enabled ? '启用中' : '已停用'}
+                            <span className={`badge ${p.enabled ? 'badge-enabled' : p.archivedAt ? 'badge-gold' : 'badge-disabled'}`}>
+                              {p.enabled ? '启用中' : p.archivedAt ? '已归档' : '已停用'}
                             </span>
                             <span className="text-xs text-ink-400">
                               {PROMOTION_TYPE_LABELS[p.type]}
@@ -256,17 +287,19 @@ export default function Promotions() {
                           </div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => togglePromotion(p.id)}
-                        className={`p-2 rounded-lg transition ${
-                          p.enabled
-                            ? 'text-emerald-600 hover:bg-emerald-50'
-                            : 'text-ink-400 hover:bg-ink-100'
-                        }`}
-                        title={p.enabled ? '点击停用' : '点击启用'}
-                      >
-                        {p.enabled ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
-                      </button>
+                      {!p.archivedAt && (
+                        <button
+                          onClick={() => togglePromotion(p.id)}
+                          className={`p-2 rounded-lg transition ${
+                            p.enabled
+                              ? 'text-emerald-600 hover:bg-emerald-50'
+                              : 'text-ink-400 hover:bg-ink-100'
+                          }`}
+                          title={p.enabled ? '点击停用' : '点击启用'}
+                        >
+                          {p.enabled ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
+                        </button>
+                      )}
                     </div>
 
                     <div
@@ -294,20 +327,31 @@ export default function Promotions() {
                         >
                           {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
-                        <button
-                          onClick={() => setShowSaveTpl(p.id)}
-                          className="p-2 rounded-lg text-champagne-600 hover:bg-champagne-50"
-                          title="保存为模板"
-                        >
-                          <Save className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => openEdit(p)}
-                          className="p-2 rounded-lg text-rosegold-500 hover:bg-rosegold-50"
-                          title="编辑"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
+                        {!p.archivedAt && (
+                          <>
+                            <button
+                              onClick={() => openArchiveModal(p.id)}
+                              className="p-2 rounded-lg text-champagne-600 hover:bg-champagne-50"
+                              title="归档为模板"
+                            >
+                              <Archive className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setShowSaveTpl(p.id)}
+                              className="p-2 rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-700"
+                              title="保存为模板"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => openEdit(p)}
+                              className="p-2 rounded-lg text-rosegold-500 hover:bg-rosegold-50"
+                              title="编辑"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                         <button
                           onClick={() => {
                             if (confirm('确定删除此活动规则？')) deletePromotion(p.id);
@@ -333,73 +377,159 @@ export default function Promotions() {
             })}
           </div>
         )
-      ) : templates.length === 0 ? (
-        <div className="card p-16 text-center">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-ink-50 flex items-center justify-center mb-4">
-            <Save className="w-8 h-8 text-ink-300" />
-          </div>
-          <p className="text-ink-500 text-sm">还没有保存任何模板</p>
-          <p className="text-xs text-ink-400 mt-1">在活动列表中点击「保存」图标可将规则打包为模板</p>
-        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((t) => {
-            const Icon = typeIconMap[t.type];
-            return (
-              <div key={t.id} className="card card-hover overflow-hidden">
-                <div className="p-5">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${typeColors[t.type]}`}>
-                      <Icon className="w-4.5 h-4.5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-display font-semibold text-ink-800 truncate">{t.name}</h4>
-                      <span className="badge badge-gold mt-1">
-                        {PROMOTION_TYPE_LABELS[t.type]}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="px-3 py-2 rounded-lg bg-ink-50 border border-ink-100 mb-3">
-                    <div className="text-xs font-semibold text-ink-600">{ruleSummary(t.type, t.config)}</div>
-                  </div>
-
-                  {t.description && (
-                    <p className="text-xs text-ink-500 mb-3 line-clamp-2">{t.description}</p>
-                  )}
-
-                  <div className="flex items-center justify-between pt-3 border-t border-ink-100">
-                    <span className="text-xs text-ink-400">保存于 {formatDateShort(t.savedAt)}</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => exportTemplate(t.id)}
-                        className="p-2 rounded-lg text-ink-400 hover:text-ink-700 hover:bg-ink-50"
-                        title="导出JSON"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => doFromTpl(t.id)}
-                        className="btn-primary !py-1.5 !px-3 text-xs"
-                      >
-                        <FolderUp className="w-3.5 h-3.5" />
-                        复用
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm('确定删除此模板？')) deleteTemplate(t.id);
-                        }}
-                        className="p-2 rounded-lg text-ink-400 hover:text-rosegold-600 hover:bg-rosegold-50"
-                      >
-                        <Trash className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+        <>
+          <div className="flex items-center gap-2 mb-4">
+            {(['all', 'saved', 'archive'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setTplFilter(f)}
+                className={`tab-btn ${tplFilter === f ? 'tab-btn-active' : 'tab-btn-inactive'}`}
+              >
+                {f === 'all' ? '全部' : f === 'archive' ? '归档记录' : '手动保存'}
+              </button>
+            ))}
+          </div>
+          {filteredTemplates.length === 0 ? (
+            <div className="card p-16 text-center">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-ink-50 flex items-center justify-center mb-4">
+                <Save className="w-8 h-8 text-ink-300" />
               </div>
-            );
-          })}
-        </div>
+              <p className="text-ink-500 text-sm">
+                {tplFilter === 'archive' ? '还没有归档记录' : tplFilter === 'saved' ? '还没有手动保存的模板' : '还没有保存任何模板'}
+              </p>
+              <p className="text-xs text-ink-400 mt-1">
+                {tplFilter === 'archive' ? '活动结束时点击「归档」可自动保存规则和统计数据' : '在活动列表中点击「保存」图标可将规则打包为模板'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredTemplates.map((t) => {
+                const Icon = typeIconMap[t.type];
+                const expanded = expandTplId === t.id;
+                return (
+                  <div key={t.id} className={`card card-hover overflow-hidden ${t.isArchive ? 'border-champagne-200' : ''}`}>
+                    <div className="p-5">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${typeColors[t.type]}`}>
+                          <Icon className="w-4.5 h-4.5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-display font-semibold text-ink-800 truncate">{t.name}</h4>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="badge badge-gold">{PROMOTION_TYPE_LABELS[t.type]}</span>
+                            {t.isArchive && (
+                              <span className="badge bg-champagne-100 text-champagne-800 border border-champagne-300">
+                                <Archive className="w-3 h-3 mr-0.5" /> 归档
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="px-3 py-2 rounded-lg bg-ink-50 border border-ink-100 mb-3">
+                        <div className="text-xs font-semibold text-ink-600">{ruleSummary(t.type, t.config)}</div>
+                      </div>
+
+                      {t.isArchive && t.statsSummary && (
+                        <div className="grid grid-cols-2 gap-2 mb-3 p-2.5 rounded-lg bg-champagne-50/40 border border-champagne-100">
+                          <div className="text-center">
+                            <div className="text-[11px] text-ink-500">订单数</div>
+                            <div className="text-sm font-bold text-ink-700">{t.statsSummary.orderCount}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-[11px] text-ink-500">实收</div>
+                            <div className="text-sm font-bold text-champagne-600">{formatMoney(t.statsSummary.totalRevenue)}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-[11px] text-ink-500">让利</div>
+                            <div className="text-sm font-bold text-rosegold-500">{formatMoney(t.statsSummary.totalDiscount)}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-[11px] text-ink-500">原价总额</div>
+                            <div className="text-sm font-bold text-ink-600">{formatMoney(t.statsSummary.originalTotal)}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {t.isArchive && (t.startDate || t.endDate) && (
+                        <div className="flex items-center gap-1.5 text-xs text-ink-500 mb-2">
+                          <Clock className="w-3.5 h-3.5" />
+                          {t.startDate && <span>{formatDateShort(t.startDate)}</span>}
+                          <span>→</span>
+                          {t.endDate && <span>{formatDateShort(t.endDate)}</span>}
+                        </div>
+                      )}
+
+                      {t.notes && (
+                        <div className="flex items-start gap-1.5 text-xs text-ink-500 mb-3">
+                          <FileText className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                          <span className="line-clamp-2">{t.notes}</span>
+                        </div>
+                      )}
+
+                      {!t.isArchive && t.description && (
+                        <p className="text-xs text-ink-500 mb-3 line-clamp-2">{t.description}</p>
+                      )}
+
+                      <div className="flex items-center justify-between pt-3 border-t border-ink-100">
+                        <button
+                          onClick={() => setExpandTplId(expanded ? null : t.id)}
+                          className="text-[11px] text-ink-400 hover:text-ink-600 transition"
+                        >
+                          {expanded ? '收起' : '详情'}
+                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => exportTemplate(t.id)}
+                            className="p-2 rounded-lg text-ink-400 hover:text-ink-700 hover:bg-ink-50"
+                            title="导出JSON"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => doFromTpl(t.id)}
+                            className="btn-primary !py-1.5 !px-3 text-xs"
+                          >
+                            <FolderUp className="w-3.5 h-3.5" />
+                            复用
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('确定删除此模板？')) deleteTemplate(t.id);
+                            }}
+                            className="p-2 rounded-lg text-ink-400 hover:text-rosegold-600 hover:bg-rosegold-50"
+                          >
+                            <Trash className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {expanded && (
+                        <div className="mt-3 p-3 rounded-lg bg-ink-50 border border-ink-100 animate-slide-up space-y-2">
+                          <div>
+                            <div className="text-[11px] text-ink-400 mb-1">规则参数</div>
+                            <pre className="text-xs text-ink-600 font-mono whitespace-pre-wrap break-all">
+                              {JSON.stringify(t.config, null, 2)}
+                            </pre>
+                          </div>
+                          {t.isArchive && t.statsSummary && (
+                            <div>
+                              <div className="text-[11px] text-ink-400 mb-1">统计摘要</div>
+                              <pre className="text-xs text-ink-600 font-mono whitespace-pre-wrap break-all">
+                                {JSON.stringify(t.statsSummary, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       <Modal
@@ -533,6 +663,50 @@ export default function Promotions() {
           <p className="text-xs text-ink-400 mt-2">
             保存后可在「模板仓库」中一键复用，活动规则将打包下载本地
           </p>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!showArchive}
+        onClose={() => setShowArchive(null)}
+        title="归档活动"
+        size="md"
+        footer={
+          <>
+            <button onClick={() => setShowArchive(null)} className="btn-ghost">
+              取消
+            </button>
+            <button onClick={doArchive} className="btn-primary">
+              <Archive className="w-4 h-4" />
+              确认归档
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="p-3 rounded-lg bg-champagne-50/60 border border-champagne-200 text-sm text-champagne-700">
+            归档将自动停用该活动，保存规则、统计数据和起止时间到模板仓库。之后可从模板一键复用开启新活动。
+          </div>
+          <div>
+            <label className="label">归档名称</label>
+            <input
+              className="input"
+              placeholder="例：2026春季满减活动"
+              autoFocus
+              value={archiveForm.name}
+              onChange={(e) => setArchiveForm((f) => ({ ...f, name: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="label">归档备注</label>
+            <textarea
+              rows={3}
+              className="input resize-none"
+              placeholder="记录活动效果、经验教训，方便以后参考&#10;例：活动期间日均客流提升30%，T恤类目转化最好"
+              value={archiveForm.notes}
+              onChange={(e) => setArchiveForm((f) => ({ ...f, notes: e.target.value }))}
+            />
+          </div>
         </div>
       </Modal>
     </div>

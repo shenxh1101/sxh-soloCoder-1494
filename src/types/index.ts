@@ -29,6 +29,15 @@ export interface Promotion {
   enabled: boolean;
   description: string;
   createdAt: string;
+  startDate?: string;
+  archivedAt?: string;
+}
+
+export interface ArchiveStats {
+  orderCount: number;
+  totalRevenue: number;
+  totalDiscount: number;
+  originalTotal: number;
 }
 
 export interface PromotionTemplate {
@@ -38,6 +47,12 @@ export interface PromotionTemplate {
   config: PromotionConfig;
   description: string;
   savedAt: string;
+  isArchive: boolean;
+  startDate?: string;
+  endDate?: string;
+  notes?: string;
+  statsSummary?: ArchiveStats;
+  sourcePromotionName?: string;
 }
 
 export interface CartItem {

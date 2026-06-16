@@ -7,6 +7,7 @@ import type {
   PromotionType,
   PromotionConfig,
   DiscountPlan,
+  ArchiveStats,
 } from '@/types';
 import { storage } from '@/utils/storage';
 import { genId } from '@/utils/format';
@@ -59,6 +60,7 @@ const DEFAULT_TEMPLATES: PromotionTemplate[] = [
     config: { threshold: 500, reduce: 100, stackable: false },
     description: '每年夏季大清仓，满500减100不可叠加',
     savedAt: new Date(Date.now() - 86400000 * 20).toISOString(),
+    isArchive: false,
   },
   {
     id: 'tpl_2',
@@ -67,6 +69,7 @@ const DEFAULT_TEMPLATES: PromotionTemplate[] = [
     config: { discount: 0.85 },
     description: '每月会员日专属折扣',
     savedAt: new Date(Date.now() - 86400000 * 25).toISOString(),
+    isArchive: false,
   },
 ];
 
@@ -148,6 +151,7 @@ interface StoreState {
   togglePromotion: (id: string) => void;
 
   saveAsTemplate: (promotionId: string, templateName: string) => void;
+  archivePromotion: (promotionId: string, data: { name: string; notes: string }) => void;
   createFromTemplate: (templateId: string) => Promotion;
   deleteTemplate: (templateId: string) => void;
 
@@ -222,11 +226,13 @@ export const useStore = create<StoreState>((set, get) => {
     setIsMember: (v) => set({ isMember: v }),
 
     addPromotion: (data) => {
+      const now = new Date().toISOString();
       const newP: Promotion = {
         id: genId(),
         ...data,
         enabled: true,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
+        startDate: now,
       };
       set((s) => {
         const list = [...s.promotions, newP];
@@ -269,6 +275,8 @@ export const useStore = create<StoreState>((set, get) => {
         config: p.config,
         description: p.description,
         savedAt: new Date().toISOString(),
+        isArchive: false,
+        sourcePromotionName: p.name,
       };
       set((s) => {
         const list = [tpl, ...s.templates];
@@ -277,16 +285,55 @@ export const useStore = create<StoreState>((set, get) => {
       });
     },
 
+    archivePromotion: (promotionId, data) => {
+      const p = get().promotions.find((x) => x.id === promotionId);
+      if (!p) return;
+      const orders = get().orders;
+      const relatedOrders = orders.filter((o) => o.appliedPromotionId === promotionId);
+      const stats: ArchiveStats = {
+        orderCount: relatedOrders.length,
+        totalRevenue: relatedOrders.reduce((s, o) => s + o.finalAmount, 0),
+        totalDiscount: relatedOrders.reduce((s, o) => s + o.discountAmount, 0),
+        originalTotal: relatedOrders.reduce((s, o) => s + o.originalAmount, 0),
+      };
+      const now = new Date().toISOString();
+      const tpl: PromotionTemplate = {
+        id: genId(),
+        name: data.name || p.name,
+        type: p.type,
+        config: p.config,
+        description: p.description,
+        savedAt: now,
+        isArchive: true,
+        startDate: p.startDate || p.createdAt,
+        endDate: now,
+        notes: data.notes,
+        statsSummary: stats,
+        sourcePromotionName: p.name,
+      };
+      set((s) => {
+        const tList = [tpl, ...s.templates];
+        storage.setTemplates(tList);
+        const pList = s.promotions.map((pr) =>
+          pr.id === promotionId ? { ...pr, enabled: false, archivedAt: now } : pr
+        );
+        storage.setPromotions(pList);
+        return { templates: tList, promotions: pList };
+      });
+    },
+
     createFromTemplate: (templateId) => {
       const tpl = get().templates.find((t) => t.id === templateId)!;
+      const now = new Date().toISOString();
       const newP: Promotion = {
         id: genId(),
-        name: tpl.name + '（复用）',
+        name: tpl.name.replace(/（复用）$/, '').replace(/（归档.*$/, '') + '（复用）',
         type: tpl.type,
         config: tpl.config,
         enabled: true,
         description: tpl.description,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
+        startDate: now,
       };
       set((s) => {
         const list = [newP, ...s.promotions];
